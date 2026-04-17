@@ -2,7 +2,7 @@ import re
 from time import time
 import discord
 import logging
-from freedictionaryapi.clients.sync_client import DictionaryApiClient
+from freedictionaryapi.clients.async_client import AsyncDictionaryApiClient
 from freedictionaryapi.errors import DictionaryApiError
 from wordfreq import zipf_frequency
 from typing import Dict, List, Optional
@@ -11,7 +11,6 @@ from redbot.core.bot import Red
 from redbot.core.utils.views import SimpleMenu
 
 log = logging.getLogger("red.atnqty-cogs.apropos")
-client = DictionaryApiClient()
 
 def batched(lst: list, n: int):
     for i in range(0, len(lst), n):
@@ -34,7 +33,8 @@ class Apropos(commands.Cog):
         self.aprocdict: Dict[int, Dict[str, float]] = {}
         self.aprominlen: Dict[int, int] = {}
         self.config.register_guild(aprominf=1.0, apromaxf=2.7, aproall=False, aprouids=[], aprobl=[], aprocd=604800, aprocdict={}, aprominlen=5)
-
+        self.client = AsyncDictionaryApiClient()
+    
     async def cog_load(self):
         all_config = await self.config.all_guilds()
         self.aprominf = {guild_id: conf['aprominf'] for guild_id, conf in all_config.items()}
@@ -45,6 +45,10 @@ class Apropos(commands.Cog):
         self.aprocd = {guild_id: conf['aprocd'] for guild_id, conf in all_config.items()}
         self.aprocdict = {guild_id: conf['aprocdict'] for guild_id, conf in all_config.items()}
         self.aprominlen = {guild_id: conf['aprominlen'] for guild_id, conf in all_config.items()}
+
+    async def cog_unload(self):
+        if self.client:
+            await self.client.close()
 
     # Listeners
 
@@ -104,7 +108,7 @@ class Apropos(commands.Cog):
                 for word in aproposes_real:
                     worddefs = None
                     try:
-                        worddefs = client.fetch_word(word)
+                        worddefs = await self.client.fetch_word(word)
                     except DictionaryApiError:
                         log.info(f'API error for word {word}')
                     else:
